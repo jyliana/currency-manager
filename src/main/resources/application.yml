@@ -1,0 +1,32 @@
+server:
+  port: 8001
+
+spring:
+  application:
+    name: Home manager
+  main:
+    banner-mode: off
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/manager
+    username: postgres
+    password: root
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 10
+      auto-commit: true
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+privat:
+  currency:
+    rates:
+      json:
+        url: https://api.privatbank.ua/p24api/exchange_rates
