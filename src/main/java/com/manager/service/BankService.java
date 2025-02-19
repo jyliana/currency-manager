@@ -107,7 +107,8 @@ public class BankService {
         try {
           Thread.sleep(duration);
         } catch (InterruptedException e) {
-          throw new RuntimeException("Error while waiting for the next request", e);
+          log.error("Error while waiting for the next request", e);
+          Thread.currentThread().interrupt();
         }
       }
     }
