@@ -1,26 +1,25 @@
 package com.manager.service;
 
-import lombok.AllArgsConstructor;
-import lombok.SneakyThrows;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriBuilder;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.net.URI;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 @Component
-@AllArgsConstructor
+@RequiredArgsConstructor
 @Slf4j
 public class PrivatClient {
 
-  private WebClient client;
+  private final WebClient client;
 
-  @SneakyThrows
   public String getCurrencyRatesJson(String date) {
     Function<UriBuilder, URI> queryParam = uriBuilder -> uriBuilder
             .queryParam("date", date)
@@ -36,8 +35,9 @@ public class PrivatClient {
             .onStatus(HttpStatusCode::is5xxServerError, response ->
                     Mono.error(new RuntimeException("Server error occurred.")))
             .bodyToMono(String.class)
-//            .retryWhen(Retry.fixedDelay(3, Duration.ofSeconds(Random.from(new Random()).nextInt(10) + 5))
-//                    .filter(throwable -> throwable instanceof TimeoutException))
+            .retryWhen(Retry.max(3)
+                    .filter(e -> e instanceof TimeoutException)
+                    .doBeforeRetry(retrySignal -> log.warn("Retrying...")))
             .doOnError(TimeoutException.class, e -> log.error("Request timed out: {}", date, e))
             .block();
   }

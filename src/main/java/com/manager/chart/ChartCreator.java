@@ -23,7 +23,33 @@ import java.util.List;
 @Slf4j
 public class ChartCreator {
 
-  public void createChart(List<DataPoint> dataPoints, String outputFile, String period) {
+  public void parsePeriod(List<Currency> currencyList, String period) {
+    var currencies = currencyList.stream()
+            .sorted(Comparator.comparing(Currency::date)).toList();
+
+    var dataPoints = parseData(currencies);
+    var file = "chart_" + currencyList.getFirst().currency() + ".png";
+    createChart(dataPoints, file, period);
+
+    log.info("Chart saved as {}", file);
+  }
+
+  private List<DataPoint> parseData(List<Currency> exchangeRates) {
+    List<DataPoint> dataPoints = new ArrayList<>();
+
+    for (Currency item : exchangeRates) {
+      var dataPoint = DataPoint.builder()
+              .date(Date.from(item.date().atStartOfDay(ZoneId.systemDefault()).toInstant()))
+              .currency(item.currency())
+              .saleRate(item.saleRate())
+              .build();
+
+      dataPoints.add(dataPoint);
+    }
+    return dataPoints;
+  }
+
+  private void createChart(List<DataPoint> dataPoints, String outputFile, String period) {
     TimeSeries series = new TimeSeries("Values");
     for (DataPoint dataPoint : dataPoints) {
       series.add(new Day(dataPoint.getDate()), dataPoint.getSaleRate());
@@ -47,32 +73,6 @@ public class ChartCreator {
     } catch (IOException e) {
       throw new RuntimeException("Error while saving chart", e);
     }
-  }
-
-  public void parsePeriod(List<Currency> currencyList, String period) {
-    var currencies = currencyList.stream()
-            .sorted(Comparator.comparing(Currency::date)).toList();
-
-    var dataPoints = parseData(currencies);
-    var file = "chart_" + currencyList.getFirst().currency() + ".png";
-    createChart(dataPoints, file, period);
-
-    log.info("Chart saved as {}", file);
-  }
-
-  public List<DataPoint> parseData(List<Currency> exchangeRates) {
-    List<DataPoint> dataPoints = new ArrayList<>();
-
-    for (Currency item : exchangeRates) {
-      var dataPoint = DataPoint.builder()
-              .date(Date.from(item.date().atStartOfDay(ZoneId.systemDefault()).toInstant()))
-              .currency(item.currency())
-              .saleRate(item.saleRate())
-              .build();
-
-      dataPoints.add(dataPoint);
-    }
-    return dataPoints;
   }
 
 }

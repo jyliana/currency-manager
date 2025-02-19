@@ -3,7 +3,7 @@ package com.manager.controller;
 import com.manager.chart.ChartCreator;
 import com.manager.data.dto.Currency;
 import com.manager.service.BankService;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,47 +12,50 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/currencies")
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class CurrencyController {
 
-  private BankService service;
-  private ChartCreator creator;
+  private final BankService service;
+  private final ChartCreator creator;
 
   @GetMapping("/day")
   public ResponseEntity<List<Currency>> getCurrencyRates(@RequestParam String date) {
-    var json = service.getExchangeRates(date);
+    var result = service.getExchangeRates(date);
 
-    return ResponseEntity.status(HttpStatus.OK).body(json);
+    return ResponseEntity.status(HttpStatus.OK).body(result);
   }
 
   @GetMapping("/dates")
-  public ResponseEntity<List<Currency>> getCurrencyRatesForDates(@RequestParam String startDate, @RequestParam String endDate, @RequestParam String currency) {
-    var json = service.getAllRecordsForDates(startDate, endDate, currency);
-    creator.parsePeriod(json, startDate + "_" + endDate);
-
-    return ResponseEntity.status(HttpStatus.OK).body(json);
-  }
-
-  @GetMapping("/period")
-  public ResponseEntity<List<Currency>> getCurrencyRatesForPeriod(@RequestParam String period, @RequestParam String currency) {
-    var json = service.getAllRecordsForPeriod(period, currency);
-    creator.parsePeriod(json, period);
-    return ResponseEntity.status(HttpStatus.OK).body(json);
-  }
-
-  @GetMapping("/period/both_currencies")
-  public ResponseEntity<String> getCurrencyRatesForPeriodForCurrencies(@RequestParam String period) {
-    var currenciesList = service.getAllRecordsForPeriod(period, null);
+  public ResponseEntity<List<Currency>> getCurrencyRatesForDates(@RequestParam String startDate,
+                                                                 @RequestParam String endDate,
+                                                                 @RequestParam(required = false) String currency) {
+    var currenciesList = service.getAllRecordsForDates(startDate, endDate, currency);
 
     currenciesList.stream()
             .collect(Collectors.groupingBy(Currency::currency))
-            .forEach((currency, list) -> creator.parsePeriod(list, period));
+            .forEach((cur, list) -> creator.parsePeriod(list, startDate + "-" + endDate));
 
-    return ResponseEntity.status(HttpStatus.OK).body("Charts for USD and EUR successfully saved");
+    return ResponseEntity.status(HttpStatus.OK).body(currenciesList);
+  }
+
+
+  @GetMapping("/period")
+  public ResponseEntity<String> getCurrencyRatesForPeriodForCurrencies(@RequestParam String period,
+                                                                       @RequestParam(required = false) String currency) {
+    var currenciesList = service.getAllRecordsForPeriod(period, currency);
+
+    currenciesList.stream()
+            .collect(Collectors.groupingBy(Currency::currency))
+            .forEach((cur, list) -> creator.parsePeriod(list, period));
+    var line = Objects.isNull(currency) ? "Charts for USD and EUR successfully saved." :
+            String.format("Chart for %s successfully saved.", currency);
+
+    return ResponseEntity.status(HttpStatus.OK).body(line);
   }
 
 }

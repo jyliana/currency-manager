@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.manager.data.dto.Currency;
 import com.manager.data.dto.ExchangeRateDto;
 import com.manager.data.dto.FullCurrencyData;
+import com.manager.exception.DataParsingException;
 import com.manager.repository.ExchangeRatesRepository;
-import lombok.AllArgsConstructor;
-import lombok.SneakyThrows;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -19,14 +19,30 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-@Component
-@AllArgsConstructor
 @Slf4j
+@Component
+@RequiredArgsConstructor
 public class BankService {
 
-  private PrivatClient client;
-  private ObjectMapper objectMapper;
-  private ExchangeRatesRepository repository;
+  private final PrivatClient client;
+  private final ObjectMapper objectMapper;
+  private final ExchangeRatesRepository repository;
+
+  public List<Currency> getAllRecordsForPeriod(String period, String currency) {
+    var endDate = LocalDate.now();
+
+    var startDate = switch (period) {
+      case "week" -> endDate.minusWeeks(1);
+      case "month" -> endDate.minusMonths(1);
+      case "quarter" -> endDate.minusMonths(3);
+      case "half-year" -> endDate.minusMonths(6);
+      case "nine-months" -> endDate.minusMonths(9);
+      case "year" -> endDate.minusMonths(12);
+      default -> LocalDate.now().minusDays(1);
+    };
+
+    return getAllRecordsForDates(convertLocalDateToDate(startDate), convertLocalDateToDate(endDate), currency);
+  }
 
   public List<ExchangeRateDto> checkArchivedRates(String date) {
     var localDate = convertDateToLocalDate(date);
@@ -34,7 +50,19 @@ public class BankService {
     return repository.findAllByDate(localDate);
   }
 
-  @SneakyThrows
+  public List<Currency> getExchangeRates(String date) {
+    var archivedRates = checkArchivedRates(date);
+
+    if (!archivedRates.isEmpty()) {
+      return convertRatesDtoToCurrencyRates(archivedRates);
+    }
+
+    var requiredCurrencies = getRequiredCurrenciesFromApi(date);
+    requiredCurrencies.forEach(this::saveCurrencies);
+
+    return requiredCurrencies;
+  }
+
   public List<Currency> getAllRecordsForDates(String startDate, String endDate, String currency) {
     var localStartDate = convertDateToLocalDate(startDate);
     var localEndDate = convertDateToLocalDate(endDate);
@@ -55,7 +83,7 @@ public class BankService {
     return allRates;
   }
 
-  private List<Currency> getRatesForMissingDays(String currency, List<LocalDate> missingDays) throws InterruptedException {
+  private List<Currency> getRatesForMissingDays(String currency, List<LocalDate> missingDays) {
     List<Currency> allRates = new ArrayList<>();
 
     for (LocalDate date : missingDays) {
@@ -76,45 +104,20 @@ public class BankService {
       if (missingDays.size() > 2) {
         var duration = Duration.ofSeconds(8);
         log.info("Waiting for {} seconds", duration.getSeconds());
-        Thread.sleep(duration);
+        try {
+          Thread.sleep(duration);
+        } catch (InterruptedException e) {
+          throw new RuntimeException("Error while waiting for the next request", e);
+        }
       }
     }
     return allRates;
   }
 
-  public List<Currency> getAllRecordsForPeriod(String period, String currency) {
-    var endDate = LocalDate.now();
-    LocalDate startDate;
-
-    switch (period) {
-      case "week" -> startDate = endDate.minusWeeks(1);
-      case "month" -> startDate = endDate.minusMonths(1);
-      case "quarter" -> startDate = endDate.minusMonths(3);
-      case "half-year" -> startDate = endDate.minusMonths(6);
-      default -> startDate = LocalDate.now().minusDays(1);
-    }
-
-    return getAllRecordsForDates(convertLocalDateToDate(startDate), convertLocalDateToDate(endDate), currency);
-  }
-
-
   private List<Currency> convertRatesDtoToCurrencyRates(List<ExchangeRateDto> list) {
     return list.stream()
             .map(c -> new Currency(c.getDate(), c.getCurrency(), c.getSaleRate(), c.getPurchaseRate()))
             .toList();
-  }
-
-  public List<Currency> getExchangeRates(String date) {
-    var archivedRates = checkArchivedRates(date);
-
-    if (!archivedRates.isEmpty()) {
-      return convertRatesDtoToCurrencyRates(archivedRates);
-    }
-
-    var requiredCurrencies = getRequiredCurrenciesFromApi(date);
-    requiredCurrencies.forEach(this::saveCurrencies);
-
-    return requiredCurrencies;
   }
 
   private void saveCurrencies(Currency c) {
@@ -145,7 +148,7 @@ public class BankService {
     try {
       return objectMapper.readValue(json, FullCurrencyData.class);
     } catch (Exception e) {
-      throw new RuntimeException("Error happened while parsing JSON.", e);
+      throw new DataParsingException("Error happened while parsing JSON.", e);
     }
   }
 
@@ -153,7 +156,7 @@ public class BankService {
     try {
       return LocalDate.parse(date, DateTimeFormatter.ofPattern("dd.MM.yyyy"));
     } catch (DateTimeException ex) {
-      throw new RuntimeException("The error occurred while parsing the date {}", ex);
+      throw new DataParsingException("The error occurred while parsing the date {}", ex);
     }
   }
 

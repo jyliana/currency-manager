@@ -26,7 +26,7 @@ public class ExchangeRatesConfiguration {
 
   @Bean
   public ObjectMapper objectMapper() {
-    ObjectMapper objectMapper = new ObjectMapper();
+    var objectMapper = new ObjectMapper();
     objectMapper.registerModule(new JavaTimeModule());
     objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     return objectMapper;
@@ -34,12 +34,13 @@ public class ExchangeRatesConfiguration {
 
   @Bean
   public WebClient webClient() {
-    HttpClient httpClient = HttpClient.create()
+    var httpClient = HttpClient.create()
             .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
             .responseTimeout(Duration.ofSeconds(2))
             .doOnConnected(conn -> conn
                     .addHandlerLast(new ReadTimeoutHandler(20, TimeUnit.SECONDS))
                     .addHandlerLast(new WriteTimeoutHandler(200, TimeUnit.MILLISECONDS)));
+
     return WebClient.builder()
             .clientConnector(new ReactorClientHttpConnector(httpClient))
             .baseUrl(url)
